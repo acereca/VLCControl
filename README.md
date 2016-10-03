@@ -15,7 +15,7 @@ small Utility to control VLC-PLayer via its HTTP-Server
 
 - Volume control and display
 
-<img src="res/example.png"></img>
+<img src="https://github.com/acereca/VLCControl/raw/master/res/example.PNG"></img>
 
 ---
 ## Install
