@@ -48,7 +48,9 @@ small Utility to control VLC-PLayer via its HTTP-Server
 
 2. now open the **config.json** in the VLCControl folder and change
 
-	  > "password": "**abcde**"
+	 ```json
+   "password": "abcde"
+   ```
 
    to the password which we set in advance (if the password was different from abcde)
 
