@@ -1,0 +1,13 @@
+{
+  "appearance": {
+    "pos": {
+      "x": 1945,
+      "y": 540
+    },
+    "color": "#00A0B1"
+  },
+  "security": {
+    "user": "",
+    "password":"abcde"
+  }
+}
