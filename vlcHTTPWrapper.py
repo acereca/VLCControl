@@ -10,18 +10,22 @@ class vlcHTTPWrapper:
     # status vars
     volume = 0
     muted = False
-    url = ""
+    url = "http://localhost:8080/requests/status.xml"
     opener = ""
 
-    def __init__(self, usr: str, pwd: str, port: int):
+    def __init__(self, usr: str, pwd: str, port: str):
 
         """
         SETUP: setting HTTP Auth ond creating the opener for HTTP requests
-        :param usr(str): user for http-request
-        :param pwd(str): password for http-request
-        :param port(int): port for vlc http server
+
+        Args:
+            usr(str): user for http-request
+            pwd(str): password for http-request
+            port(int): port for vlc http server
         """
-        self.url = str('http://localhost:' + port + '/requests/status.xml')
+
+        if port != "8080":
+            self.url = str('http://localhost:' + port + '/requests/status.xml')
 
         pwd_mgr = req.HTTPPasswordMgrWithDefaultRealm()
         pwd_mgr.add_password(None,
@@ -36,10 +40,13 @@ class vlcHTTPWrapper:
 
         """
         REQUEST: return xml.ElementTree that vlc HTTP privides
-        :param requrl(str): custom url to use for vlc_req()
-        :return (xml.etree.ElementTree)
-        """
 
+        Args:
+            requrl(str): custom url to use for vlc_req()
+
+        Returns:
+            (xml.etree.ElementTree)
+        """
         try:
             resp = self.opener.open(requrl)
             resp_str = resp.read().decode('utf-8').strip()
@@ -51,50 +58,37 @@ class vlcHTTPWrapper:
 
     def vlc_cmd(self, cmd: str) -> etree:
 
-        """
-        REQUEST + CMD: send http-request via vlc_req() with custom url
-        :param cmd(str): 'pause', 'next', 'back'
-        :return (xml.etree.ElementTree):
-        """
-
         if cmd == 'pause':
             cmdurl = 'pl_pause'
+
         elif cmd == 'next':
             cmdurl = 'pl_next'
+
         elif cmd == 'back':
             cmdurl = 'pl_previous'
-        else:
-            cmdurl = ''
 
-        return self.vlc_req(requrl = str(self.url + "?command=" + cmdurl))
+        elif cmd == 'volup':
+            volume = int(self.vlc_req().findall(".//volume")[0].text)
 
-
-    def vlc_do(self, cmd: str, v_vol: tk.StringVar) -> etree:
-
-        """
-        REQUEST + CMD: send http-request via vlc_req() with custom url and setting specified textvar to setr
-        :param cmd:
-        :param v_vol:
-        :return:
-        """
-        volume = int(self.vlc_req().findall(".//volume")[0].text)
-
-        if cmd == 'volup':
-            vol_chg = volume + 5
+            cmdurl = 'volume&val=' + str(volume + 5)
 
         elif cmd == 'mute':
+            volume = int(self.vlc_req().findall(".//volume")[0].text)
+
             if not self.muted:
-                vol_chg = 0
+                cmdurl = 'volume&val=0'
                 self.volume = volume
 
             else:
-                vol_chg = self.volume
+                cmdurl = 'volume&val=' + str(self.volume)
 
-            self.muted =  not self.muted
+            self.muted = not self.muted
 
         elif cmd == 'voldown':
-            vol_chg = volume - 5
+            volume = int(self.vlc_req().findall(".//volume")[0].text)
 
-        v_vol.set(str(vol_chg) if not self.muted else "\uD83D\uDD07")
+            cmdurl = 'volume&val=' + str(volume - 5)
+        else:
+            cmdurl = ''
 
-        return self.vlc_req(requrl=(self.url + "?command=volume&val=" + str(vol_chg)))
+        return self.vlc_req(requrl=str(self.url + "?command=" + cmdurl))

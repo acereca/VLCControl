@@ -2,133 +2,165 @@
 
 import tkinter as tk
 import xml.etree.ElementTree as etree
-import html, json, os
+import html, json, os, time
 from vlcHTTPWrapper import *
 from twitch import *
 
-# SETUP
-f = open(os.path.join(os.path.dirname(__file__), "settings.json"), "r")
-j_settings = json.load(f)
+class vlcc:
 
-color = j_settings['appearance']['color']
+    # SETUP
+    f = open(os.path.join(os.path.dirname(__file__), "settings.json"), "r")
+    j_settings = json.load(f)
 
-pos_x = int(j_settings['appearance']['pos']['x'])
-pos_y = int(j_settings['appearance']['pos']['x'])
+    color = j_settings['appearance']['color']
 
-http_wrapper = vlcHTTPWrapper(j_settings['security']['user'], j_settings['security']['password'])
+    pos_x = int(j_settings['appearance']['pos']['x'])
+    pos_y = int(j_settings['appearance']['pos']['x'])
 
-## xml-lookup variables
-pos_v = ".//volume"
-pos_p = ".//*[@name='now_playing']"
-pos_t = ".//*[@name='filename']"
-pos_a = ".//*[@name='artist']"
+    http_wrapper = vlcHTTPWrapper(j_settings['security']['user'], j_settings['security']['password'], str(j_settings['security']['port']))
 
+    # xml-lookup variables
+    pos_v = ".//volume"
+    pos_p = ".//*[@name='now_playing']"
+    pos_t = ".//*[@name='filename']"
+    pos_a = ".//*[@name='artist']"
+    stat_dict = {pos_v: 'v', pos_a: 'a', pos_t: 't'}
 
-def get_stats():
+    w_ctrl = tk.Tk()
+    w_info = tk.Toplevel()
 
-    """
-    returns dictionary with displayable values for ui from http-request using the http_wrapper created beforehand
-    :return (dict): disctionary with keys responding to xml-lookups (pos_...)
-    """
+    v_vol = tk.StringVar()
+    v_artist = tk.StringVar()
+    v_title = tk.StringVar()
 
-    request = http_wrapper.vlc_req()
+    def update_stats(self, do_cycle = False):
 
-    try:
-        disp_a = request.findall(pos_a)[0].text
-    except:
-        disp_a = "artist"
+        """
+        returns dictionary with displayable values for ui from http-request using the http_wrapper created beforehand
 
-    try:
-        disp_t = request.findall(pos_t)[0].text
-    except:
-        disp_t = "title"
+        Args
+            stats(dict): dictionary to be replaced (with keys responding to xml-lookups)
+        """
 
-    try:
-        disp_v = request.findall(pos_v)[0].text
-    except:
-        disp_v = "vol"
+        request = self.http_wrapper.vlc_req()
 
-    if "ttvnw.net" in disp_t:
-        channel = disp_t[:100].split("/")[4].split("_")[0]
-        d_kraken = fetch_kraken(channel)
-        disp_t = d_kraken['stream']['channel']['status']
-        disp_a = d_kraken['stream']['channel']['display_name']
+        try:
+            d_a = request.findall(self.pos_a)[0].text
+        except:
+            d_a = "artist"
 
-    if http_wrapper.muted:
-        disp_v = "\uD83D\uDD07"
+        try:
+            d_t = request.findall(self.pos_t)[0].text
+        except:
+            d_t = "title"
 
-    return {pos_v: disp_v, pos_a: disp_a, pos_t: disp_t}
+        try:
+            d_v = request.findall(self.pos_v)[0].text
+        except:
+            d_v = "vol"
 
-#TODO: change update to use cached values
+        if "ttvnw.net" in d_t:
+            channel = d_t[:100].split("/")[4].split("_")[0]
+            v_kraken = fetch_kraken(channel)
+            d_t = v_kraken['stream']['channel']['status']
+            d_a = v_kraken['stream']['channel']['display_name']
 
-def update_stat(stat: str, v_stat: tk.StringVar, timing = 5000):
+        if self.http_wrapper.muted:
+            d_v = "\uD83D\uDD07"
+        else :
+            try:
+                d_v = str(int(int(d_v)/2.55)) + "%"
+            except:
+                print('')
 
-    """
-    update ui elements via its textvar from generated stat-dictionary
+        self.stat_dict = {self.pos_v: d_v, self.pos_a: d_a, self.pos_t: d_t}
 
-    Args:
-        stat(str): xml-lookup representing the entry in stat-dictionary
-        v_stat(tk.StringVar): textvar for ui element to update
-        timing (int = 5000, optional): update delay time in ms
-    """
+        if do_cycle:
+            self.w_ctrl.after(20000, lambda: self.update_stats(self.stat_dict))
 
-    stats = get_stats()
-    v_stat.set(stats[stat])
+    def update_ui(self, stat: str, v_stat: tk.StringVar, do_cycle = True, timing = 5000):
 
-    # self-looping
-    w_ctrl.after(timing, lambda: update_stat(stat, v_stat))
+        """
+        update ui elements via its textvar from generated stat-dictionary
 
+        Args:
+            stat(str): xml-lookup representing the entry in stat-dictionary
+            v_stat(tk.StringVar): textvar for ui element to update
+            timing (int = 5000, optional): update delay time in ms
+        """
 
-# MAIN
+        v_stat.set(self.stat_dict[stat])
 
-w_ctrl = tk.Tk()
+        # self-looping
+        if do_cycle:
+            self.w_ctrl.after(timing, lambda: self.update_ui(stat, v_stat, timing))
 
-p_bck = tk.PhotoImage(file="res/previous.png")
-p_fwd = tk.PhotoImage(file="res/next.png")
-p_ply = tk.PhotoImage(file="res/play.png")
-p_pse = tk.PhotoImage(file="res/pause.png")
+    def on_click(self, cmd):
 
-tk.Button(w_ctrl, image=p_bck, bg=color, border=0,
-          command=lambda: http_wrapper.vlc_cmd('previous')).place(x=5, y=30)
+        print(cmd)
+        self.http_wrapper.vlc_cmd(cmd)
+        if cmd == 'mute':
+            if self.http_wrapper.muted:
+                print('unmute')
+                self.stat_dict[self.pos_v] = "\uD83D\uDD07"
+            else:
+                print('mute')
+                self.stat_dict[self.pos_v] = "{}%".format(int(int(self.http_wrapper.vlc_req().findall(self.pos_v)[0].text)/2.55))
 
-tk.Button(w_ctrl, image=p_fwd, bg=color, border=0,
-          command=lambda: http_wrapper.vlc_cmd('next')).place(x=95, y=30)
-
-tk.Button(w_ctrl, image=p_ply, bg=color, border=0,
-          command=lambda: http_wrapper.vlc_cmd('pause')).place(x=50, y=30)
-
-v_vol = tk.StringVar()
-update_stat(pos_v, v_vol, 1000)
-
-tk.Button(w_ctrl, text="+", fg="white", font="DejaVuSans 30", bg=color, border=0,
-          command=lambda: http_wrapper.vlc_do('volup', v_vol)).place(x=90, y=80)
-
-tk.Button(w_ctrl, text="-", fg="white", font="DejaVuSans 30", bg=color, border=0,
-          command=lambda: http_wrapper.vlc_do('voldown', v_vol)).place(x=10, y=77)
-
-tk.Button(w_ctrl, textvariable=v_vol, fg='white', font="DejaVuSansCondensed 20", bg=color, border=0,
-          command=lambda: http_wrapper.vlc_do('mute', v_vol)).place(x=50, y=90)
-
-
-w_ctrl.geometry("150x150+1945+540")
-w_ctrl.configure(background=color)
-w_ctrl.overrideredirect(True)
-
-w_info = tk.Toplevel()
-
-v_artist = tk.StringVar()
-update_stat(pos_a, v_artist)
-l_art = tk.Label(w_info, textvariable=v_artist, fg="#aaa", bg='white', font=('DejaVuSansCondensed', 30))
-l_art.place(x=20, y=90)
-
-v_title = tk.StringVar()
-update_stat(pos_t, v_title)
-l_title = tk.Label(w_info, textvariable=v_title, fg="#999", bg='white', font=('DejaVuSansCondensed', 40))
-l_title.place(x=15, y=15)
-
-w_info.geometry("500x150+2095+540")
-w_info.configure(background='white')
-w_info.overrideredirect(True)
+        self.v_vol.set(self.stat_dict[self.pos_v])
 
 
-w_ctrl.mainloop()
+    def __init__(self):
+        # MAIN
+
+        self.update_stats(self.stat_dict)
+
+        p_bck = tk.PhotoImage(file="res/previous.png")
+        p_fwd = tk.PhotoImage(file="res/next.png")
+        p_ply = tk.PhotoImage(file="res/play.png")
+        p_pse = tk.PhotoImage(file="res/pause.png")
+
+        tk.Button(self.w_ctrl, image=p_bck, bg=self.color, border=0,
+                  command=lambda: self.on_click('previous')).place(x=5, y=30)
+
+        tk.Button(self.w_ctrl, image=p_fwd, bg=self.color, border=0,
+                  command=lambda: self.on_click('next')).place(x=95, y=30)
+
+        tk.Button(self.w_ctrl, image=p_ply, bg=self.color, border=0,
+                  command=lambda: self.on_click('pause')).place(x=50, y=30)
+
+        self.update_ui(self.pos_v, self.v_vol, timing=100)
+
+        tk.Button(self.w_ctrl, text="+", fg="white", font="Consolas 30", bg=self.color, border=0,
+                  command=lambda: self.on_click('volup')).place(x=100, y=75)
+
+        tk.Button(self.w_ctrl, text="-", fg="white", font="Consolas 30", bg=self.color, border=0,
+                  command=lambda: self.on_click('voldown')).place(x=0, y=75)
+
+        tk.Button(self.w_ctrl, textvariable=self.v_vol, fg='white', font="Consolas 20", bg=self.color, border=0,
+                  command=lambda: self.on_click('mute')).place(x=75, y=115, anchor='center')
+
+        self.w_ctrl.geometry("150x150+{}+{}".format(self.pos_x, self.pos_y))
+        self.w_ctrl.configure(background=self.color)
+        self.w_ctrl.overrideredirect(True)
+
+        self.update_ui(self.pos_a, self.v_artist)
+
+        l_art = tk.Label(self.w_info, textvariable=self.v_artist, fg="#aaa", bg='white', font=('DejaVuSansCondensed', 30))
+        l_art.place(x=20, y=90)
+
+        self.update_ui(self.pos_t, self.v_title)
+
+        l_title = tk.Label(self.w_info, textvariable=self.v_title, fg="#999", bg='white', font=('DejaVuSansCondensed', 40))
+        l_title.place(x=15, y=15)
+
+        pos_x = (int(self.pos_x) + 150)
+        print(pos_x)
+        self.w_info.geometry("500x150+{}+{}".format(self.pos_x, self.pos_y))
+        self.w_info.configure(background='white')
+        self.w_info.overrideredirect(True)
+
+        self.w_ctrl.mainloop()
+
+
+vlcc()
